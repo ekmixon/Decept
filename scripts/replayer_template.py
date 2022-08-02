@@ -259,8 +259,7 @@ def get_bytes(sock):
     ret = ""
     while True:
         try:
-            tmp = sock.recv(65535)        
-            if tmp:
+            if tmp := sock.recv(65535):
                 ret+=tmp
             else:
                 break
@@ -512,11 +511,7 @@ def process_hexstream(buf):
     req_buf = ""
     for i in range(0,len(buf),2):
         tmp = chr(int(buf[i:i+2],16))
-        if ord(tmp) > 0x30 and ord(tmp) < 122: 
-            req_buf += tmp
-        else:
-            req_buf += "\\x%02x"%ord(tmp)
-
+        req_buf += tmp if ord(tmp) > 0x30 and ord(tmp) < 122 else "\\x%02x"%ord(tmp)
     return req_buf
 
 def paste_process(request_name,format_function):
@@ -622,30 +617,25 @@ class TabCompleter(object):
             self.text = text
 
             if not readline.get_begidx():
-                for o in self.cmdoptions:
-                    if o.startswith(text):
-                        self.matches.append(o)
+                self.matches.extend(o for o in self.cmdoptions if o.startswith(text))
             else:
                 cmd_text = filter(None,readline.get_line_buffer().split(" "))
                 if len(cmd_text) == 1:
                     self.matches = self.requests[:] 
                 else:
                     self.matches = [s for s in self.requests if s.startswith(cmd_text[-1])]
-                
+
 
             if len(self.matches) == 1:
                 ret = self.matches[0]
-            elif len(self.matches) > 1:
+            elif len(self.matches) > 1 or len(self.matches) == 0:
                 self.text = str(self.matches)
-            elif len(self.matches) == 0:
-                self.text = str(self.matches)
-            
         else:
             try:
                 ret = self.matches[state]
             except IndexError:
                 pass
-    
+
         try:
             ret = self.matches[index]
         except:

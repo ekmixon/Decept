@@ -83,11 +83,7 @@ except ImportError:
     except ImportError:
         pass
 
-DEBUGGING = False
-if '-d' in sys.argv:
-    DEBUGGING = True
-
-    
+DEBUGGING = '-d' in sys.argv
 # minor hack to get decept to run on osx 
 if "darwin" in system().lower():
     socket.AF_PACKET = -1
@@ -106,15 +102,15 @@ class DeceptProxy():
         self.receive_first = receive_first
         self.local_end_type = local_end_type
         self.remote_end_type = remote_end_type
-        self.conn = True 
+        self.conn = True
         if "dtls" in local_end_type:
             output("Local DTLS sockets not supported yet, sorry (^_^);;;")
             sys.exit()
-            
+
         self.output_lock = multiprocessing.Lock()    
 
         if "udp" in local_end_type or "dtls" in local_end_type:
-            self.conn = False 
+            self.conn = False
         self.protocol_blueprints = None
         self.pkt_count = 0
         self.max_conns = 5
@@ -139,7 +135,7 @@ class DeceptProxy():
         self.rbind_port = 0
 
         # ssl options for those who care
-        
+
         #killswitch for closing sockets
         self.killswitch = multiprocessing.Event() 
 
@@ -153,7 +149,7 @@ class DeceptProxy():
         # .fuzzer Options
         self.fuzz_file = ""
         self.fuzzerData = ""
-        
+
         # assorted options 
         self.L3_raw = False
         self.dumpraw = ''
@@ -175,15 +171,15 @@ class DeceptProxy():
         self.mon_flag = None 
 
         self.tapmode = False
-    
+
         self.hostconf_dict = {}
 
         self.poison_file = ""
         self.poison_int = "eth0"
-                        
+
         self.local_certfile=local_cert
         self.local_keyfile=local_key
-        
+
         # these will get overwritten with --rkey/--rcert options
         # if both are provided
         self.remote_certfile=local_cert
@@ -193,12 +189,12 @@ class DeceptProxy():
         self.remote_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
         self.remote_context.verify_mode = ssl.CERT_NONE
         self.remote_context.check_hostname = False
-        
+
         # on successful import, these will be the imported
         # functions "inbound_hook()" and "outbound_hook()"
         self.inbound_hook = None
         self.outbound_hook = None
-    
+
         # Load SSL cert if creating local SSL prox
         if self.local_end_type  == "ssl":
             try:
@@ -210,7 +206,7 @@ class DeceptProxy():
             except Exception as e:
                 output("[x.x] Please generate keys before attempting to proxy ssl",RED)
                 output("[-_-] Protip: openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -nodes",CYAN)
-                output("[>_>] %s"%e,RED)
+                output(f"[>_>] {e}", RED)
                 sys.exit(0)
 
         elif self.local_end_type  == "dtls":
@@ -233,7 +229,7 @@ class DeceptProxy():
             except Exception as e:
                 output("[x.x] Please generate keys before attempting to proxy DTLS",RED)
                 output("[-_-] Protip: openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -nodes",CYAN)
-                output("[>_>] %s"%e,RED)
+                output(f"[>_>] {e}", RED)
                 sys.exit(0)
 
 
@@ -257,7 +253,7 @@ class DeceptProxy():
                 try:
                     remove(self.lhost)
                 except:
-                    output("[?.?] Unable to delete Unix Socket: %s"%self.lhost,YELLOW)
+                    output(f"[?.?] Unable to delete Unix Socket: {self.lhost}", YELLOW)
 
         output("[^.^] Thanks for using Decept!")
         sys.exit()
@@ -272,24 +268,21 @@ class DeceptProxy():
             while True:
                 tmp = ""
                 if self.conn:
-                    tmp = sock.recv(65535)  
-                else:
-                    # necessary for connectionless
+                    tmp = sock.recv(65535)
+                elif self.local_end_type == "udp":
+                    ret_struct = sock.recvfrom(65535) 
+                    try:
+                        tmp,(_,tmpport) = ret_struct 
+                    except ValueError:
+                        # ipv6 recvfrom gives more data
+                        tmp,(_,tmpport,_,_) = ret_struct 
 
-                    if self.local_end_type == "udp":
-                        ret_struct = sock.recvfrom(65535) 
-                        try:
-                            tmp,(_,tmpport) = ret_struct 
-                        except ValueError:
-                            # ipv6 recvfrom gives more data
-                            tmp,(_,tmpport,_,_) = ret_struct 
-    
-                        if tmpport != self.lport and tmpport != self.rport and not self.srcport: 
-                            self.lport = tmpport
-                            self.lhost = _
-                    elif self.local_end_type == "dtls":
-                        tmp,(retip,retport) = sock.recvfrom(65535)
-                       
+                    if tmpport != self.lport and tmpport != self.rport and not self.srcport: 
+                        self.lport = tmpport
+                        self.lhost = _
+                elif self.local_end_type == "dtls":
+                    tmp,(retip,retport) = sock.recvfrom(65535)
+
                 if len(tmp): 
                     ret+=tmp
                 else:
@@ -297,24 +290,21 @@ class DeceptProxy():
         except Exception as e:
             #output(str(e),YELLOW)
             pass
-    
-        if retip and (retport >= 0): 
-            return (ret,retip,retport)
 
-        return ret 
+        return (ret, retip, retport) if retip and (retport >= 0) else ret 
 
     # Takes the host (1.1.2.1, FE80::1, ab:bc:cd:ef:ab:ea)
     # and endpoint type (tcp,ssl,unix,udp)
     # and returns the appropriate socket
     def socket_plinko(self,host,endpoint):
-        s_fam = socket.AF_INET 
+        s_fam = socket.AF_INET
         s_proto = None
 
         if "stdin" in endpoint:
             return sys.stdin
         if "stdout" in endpoint:
             return sys.stdout
-    
+
         if match(r'\d{1,3}(\.\d{1,3}){3}',host):
             s_fam = socket.AF_INET
 
@@ -322,23 +312,20 @@ class DeceptProxy():
             if "darwin" in system().lower():
                 output("[x.x] RAW packet functionality in OSX not supported.")
                 sys.exit()
-            # Automatically raw. 
+            # Automatically raw.
             if endpoint == "passive":
                 # when we aren't bridging two interfaces
                 # 0x0300 => promiscuous mode
-                ret_socket = socket.socket(socket.AF_PACKET,socket.SOCK_RAW,0x0300) 
-            #endpoint == "bridge" 
+                return socket.socket(socket.AF_PACKET,socket.SOCK_RAW,0x0300)
             else: 
-                ret_socket = socket.socket(socket.AF_PACKET,socket.SOCK_RAW) 
-            return ret_socket
-
+                return socket.socket(socket.AF_PACKET,socket.SOCK_RAW)
         elif match(r'([0-9A-Fa-f]{0,4}:?)(:[0-9A-Fa-f]{1,4}:?)+',host) and host.find("::") == host.rfind("::"):
             #print repr(host)
             s_fam = socket.AF_INET6 
-        
+
         else:
             s_fam = socket.AF_UNIX  
-        
+
 
         if endpoint in ConnectionBased:
             ret_socket = socket.socket(s_fam,socket.SOCK_STREAM)
@@ -348,36 +335,33 @@ class DeceptProxy():
             # the socket is server side or client side ~ <(^.^<)
             if endpoint == "L3_raw":
                 ret_socket.setsockopt(socket.IPPROTO_IP,socket.IP_HDRINCL,1)
-            return ret_socket
-
         elif "udp" in endpoint or "dtls" in endpoint: 
             ret_socket =  socket.socket(s_fam,socket.SOCK_DGRAM)
             ret_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
-            
+
             if self.L3_raw:
                 ret_socket.setsockopt(socket.IPPROTO_IP,socket.IP_HDRINCL,1)
-
-            return ret_socket
 
         else:
             # Valid endpoint choices include anything in ValidEndpoints
             s_type = socket.SOCK_RAW
             if endpoint in PROTO:
                 # e.g. if proto == ospf, s_proto => 89
-                s_proto = PROTO[endpoint] 
+                s_proto = PROTO[endpoint]
             elif endpoint == "raw":
                 s_proto = socket.IPPROTO_RAW
-            elif endpoint == "stdin" or endpoint == "stdout":
+            elif endpoint in ["stdin", "stdout"]:
                 return
             else:
                 s_proto = int(endpoint) 
 
-            ret_socket = socket.socket(s_fam,s_type,s_proto)    
+            ret_socket = socket.socket(s_fam,s_type,s_proto)
             # Crafting L2/L3 is hard, yo.
             if self.L3_raw:
                 ret_socket.setsockopt(socket.IPPROTO_IP,socket.IP_HDRINCL,1)
+         
 
-            return ret_socket 
+        return ret_socket 
        
 
     def server_socket_init(self):

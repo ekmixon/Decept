@@ -97,10 +97,7 @@ def outbound_hook(outbound_data,userdata=[]):
 def inbound_hook(inbound_data,userdata=[]):
     try:
         opcode,fin,key,unpacked = unpack_ws_packet(inbound_data,server=True)
-        # do ops on unpacked.  
-        # 
-        repacked = repack_ws_packet(opcode,mask,unpacked)
-        return repacked
+        return repack_ws_packet(opcode,mask,unpacked)
     except:
         return inbound_data
 
@@ -116,7 +113,7 @@ def xor_ops(key,data,length):
         except:
             break
 
-    for j in range(0,length%4):
+    for j in range(length%4):
         keybyte = (key&(0xFF000000>>(i*8)))
         databyte = ord(data[i+j])
         buf+= chr(keybyte^databyte)
@@ -167,7 +164,7 @@ def repack_ws_packet(opcode,key,data):
     encoded_buf = chr(opcode+0x80)
     # mask should always be set if we get to this point 
     mask_len = 0x80
-     
+
     out_len = len(data)
     if out_len <= 125:
         mask_len += len(data) 
@@ -176,11 +173,11 @@ def repack_ws_packet(opcode,key,data):
         mask_len += 126 
         encoded_buf += chr(mask_len)
         encoded_buf+=struct.pack(">H",out_len)
-    elif out_len > 0xFFFF:
+    else:
         mask_len += 127
         encoded_buf += chr(mask_len)
         encoded_buf+=struct.pack(">Q",out_len)
-        
+
     encoded_buf+=struct.pack(">I",key)
     encoded_buf += xor_ops(key,data,len(data))
     return encoded_buf
